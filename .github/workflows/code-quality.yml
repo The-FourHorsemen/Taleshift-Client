@@ -1,0 +1,58 @@
+name: Code Quality Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  quality-checks:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for unresolved merge conflict markers
+        run: |
+          if grep -RIn --exclude-dir=.git -E '^(<<<<<<<|=======|>>>>>>>)( |$)' .; then
+            echo "❌ Unresolved merge conflict markers found."
+            exit 1
+          fi
+          echo "✅ No merge conflict markers."
+
+      - name: Check for accidentally committed large files
+        run: |
+          MAX_KB=1024
+          big=$(git ls-files -z | xargs -0 -I{} du -k "{}" 2>/dev/null | awk -v max="$MAX_KB" '$1 > max { print }')
+          if [ -n "$big" ]; then
+            echo "❌ Files larger than ${MAX_KB}KB found:"
+            echo "$big"
+            echo "Large binaries/assets usually don't belong directly in the repo."
+            exit 1
+          fi
+          echo "✅ No oversized files."
+
+      - name: Check for likely committed secrets
+        run: |
+          pattern='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY-----|xox[baprs]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{36}|sk-[0-9A-Za-z]{20,})'
+          if grep -RIn --exclude-dir=.git -E "$pattern" .; then
+            echo "❌ Possible secret detected in the diff. Remove it and rotate the credential."
+            exit 1
+          fi
+          echo "✅ No obvious secrets found."
+
+      - name: Check for TODO/FIXME markers
+        run: |
+          hits=$(grep -RIn --exclude-dir=.git -E '(TODO|FIXME)' . || true)
+          unlinked=$(echo "$hits" | grep -v -E '#[0-9]+' || true)
+          if [ -n "$unlinked" ]; then
+            echo "⚠️  TODO/FIXME found without an obvious issue reference (e.g. #123):"
+            echo "$unlinked"
+            echo "This is a warning only — link an issue or remove it before merging."
+          else
+            echo "✅ No unlinked TODO/FIXME markers."
+          fi
