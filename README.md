@@ -1,4 +1,4 @@
-# Tailshift
+# Taleshift
 
 # Branching Guide
 
