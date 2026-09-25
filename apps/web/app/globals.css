@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/* Manual dark mode: toggled via a `.dark` class on <html> (see ThemeToggle), not just system preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-plus-jakarta-sans), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Surfaces */
+  --color-app-bg: #f9f9ff;
+  --color-sidebar-bg: #f2f3fd;
+  --color-surface: #ffffff;
+
+  /* Borders */
+  --color-border-default: #c2c6d6;
+  --color-border-light: #e6e7f2;
+  --color-border-faint: rgba(194, 198, 214, 0.5);
+
+  /* Text */
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #424754;
+  --color-text-on-brand: #fefcff;
+
+  /* Brand blue */
+  --color-brand-100: #adc6ff;
+  --color-brand-300: #7ea6ff;
+  --color-brand-400: #5b8cf5;
+  --color-brand-500: #2170e4;
+  --color-brand-600: #0058be;
+  --color-brand-700: #004395;
+
+  /* Indigo accent */
+  --color-indigo-100: #d8e2ff;
+
+  /* Success */
+  --color-success-200: #6cf8bb;
+  --color-success-500: #10b981;
+
+  /* Danger */
+  --color-danger-100: #ffdad6;
+  --color-danger-100-overlay: rgba(255, 218, 214, 0.2);
+  --color-danger-600: #ba1a1a;
+  --color-danger-800: #93000a;
+}
+
+body {
+  background-color: var(--color-app-bg);
+  transition: background-color 0.15s ease;
+}
+
+/* Dark theme: redefine the semantic tokens above. Anything built from
+   these vars (bg-app-bg, bg-surface, bg-sidebar-bg, text-text-primary/
+   secondary, border-border-*) re-themes automatically with no per-
+   component dark: classes needed. Components using raw Tailwind
+   colors (slate/emerald/etc.) or arbitrary hex still need explicit
+   dark: utility classes alongside them. */
+.dark {
+  --color-app-bg: #0b1120;
+  --color-sidebar-bg: #0f172a;
+  --color-surface: #1e293b;
+
+  --color-border-default: #334155;
+  --color-border-light: #334155;
+  --color-border-faint: rgba(71, 85, 105, 0.5);
+
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-on-brand: #fefcff;
+
+  --color-brand-100: #1e3a6d;
+  --color-indigo-100: #1e2a4a;
+
+  --color-success-200: rgba(16, 185, 129, 0.2);
+
+  --color-danger-100: rgba(186, 26, 26, 0.25);
+  --color-danger-100-overlay: rgba(186, 26, 26, 0.1);
+}

@@ -11,6 +11,9 @@ Adaptive literacy app built for the hackathon.
 * [Getting Started](#getting-started)
 * [Setup](#setup)
 * [Testing the App Locally](#testing-the-app-locally)
+* [UI Screens & Routes](#ui-screens--routes)
+* [Dark Mode](#dark-mode)
+* [Connecting Supabase](#connecting-supabase)
 * [API Routes](#api-routes)
 * [Repo Shape](#repo-shape)
 * [Critical Path](#critical-path)
@@ -119,31 +122,208 @@ http://localhost:3000
 
 # Testing the App Locally
 
-Visiting:
+Start at:
 
 ```text
-http://localhost:3000/
+http://localhost:3000/login
 ```
 
-may return a `404`.
+and pick a role. The `/` route itself is the **Learner Home** screen (no auth
+gate yet — see [What's Deliberately Not Built](#whats-deliberately-not-built)).
 
-**This is expected and is not currently a bug.**
+The UI is fully built out for all three personas (learner, parent, teacher)
+with mocked data — see [UI Screens & Routes](#ui-screens--routes) below for
+the full route list and screenshots. Nothing in `/api/*` is wired to the UI
+yet; those routes are tested directly (see [API Routes](#api-routes)).
 
-The `(child)` and `(dashboard)` folders are Next.js route groups. The parentheses mean that the folders organize files without adding a URL segment.
+If a route in the table below 404s, something is actually broken.
 
-There is currently no page registered for the bare `/` path.
+---
 
-Use the available routes instead:
+# UI Screens & Routes
 
-| URL             | What it should show                           |
-| --------------- | --------------------------------------------- |
-| `/read/story-1` | Reading session placeholder                   |
-| `/feedback`     | Post-session results placeholder              |
-| `/progress`     | Parent/teacher progress dashboard placeholder |
+All screens are built with mocked/hardcoded data (see the `TODO(owner:
+unassigned)` comments scattered through `apps/web` for exactly what each
+screen still needs wired to real data). Nothing below talks to a real
+backend yet.
 
-These are currently placeholders rather than full features.
+## Sign-in
 
-If one of these routes returns a `404` instead of displaying its expected placeholder, then something is actually broken.
+| Route | Screen |
+| --- | --- |
+| `/login` | Role picker — student / parent / teacher |
+| `/login/student` | "Who's reading today?" — pick your name, then enter your **PIN** |
+| `/login/parent`, `/login/teacher` | Email/password login |
+| `/login/sign-up` | Account creation — **parent flow is 3 steps**: account → link child(ren) → child support-needs questionnaire |
+| `/login/forgot-password` | Password reset |
+| `/logout` | Logged-out confirmation |
+
+<img src="docs/screenshots/login-role-picker.png" width="600" alt="Login role picker" />
+<img src="docs/screenshots/student-pin-entry.png" width="320" alt="Student PIN entry" />
+<img src="docs/screenshots/signup-child-questionnaire.png" width="600" alt="Parent sign-up: child support-needs questionnaire" />
+
+**Student PIN protection:** each linked learner profile requires its own
+4-digit PIN before the app hands over that child's session — one student
+cannot open another student's profile from the shared picker screen.
+PINs are currently mock values held in client code
+(`components/auth/StudentLoginPicker.tsx`) — see the `TODO` there; this
+**must** move to server-side verification against a hashed PIN once
+Supabase auth is wired in.
+
+## Learner (child)
+
+| Route | Screen |
+| --- | --- |
+| `/` | Home — continue reading, today's goal, weekly activity, recommended story |
+| `/read`, `/read/[storyId]` | Reading session (mic capture UI, live word highlight) |
+| `/feedback` | Post-reading summary ("Great job!") |
+| `/words`, `/words/practice` | My Words list + practice flow |
+| `/profile` | Learner profile — badges, streak, "Switch Reader" |
+
+<img src="docs/screenshots/learner-home.png" width="600" alt="Learner Home" />
+<img src="docs/screenshots/reading-session.png" width="280" alt="Reading Session" />
+<img src="docs/screenshots/post-reading-summary.png" width="280" alt="Post-Reading Summary" />
+
+The learner nav was rebuilt to match the teacher/parent shell pattern — a
+persistent sidebar at desktop widths (branding, streak, nav, "Switch
+Reader") with a mobile bottom bar at small widths, instead of the previous
+bottom-nav-only layout.
+
+## Parent
+
+Parents get the same depth as teachers, scoped to their own linked
+child(ren) instead of a whole classroom.
+
+| Route | Screen |
+| --- | --- |
+| `/parent` | Dashboard — weekly stats, reading profile, struggle insight, adaptive engine |
+| `/parent/children` | My Children — roster of linked learners |
+| `/parent/children/[childId]` + `/progress`, `/reading-log`, `/roadmap` | Per-child deep dive (mirrors the teacher's per-student tabs) |
+| `/parent/library` | Reading Library — browse, filter, preview, assign stories; **upload custom PDF books** |
+| `/parent/settings`, `/parent/messages`, `/parent/help`, `/parent/add-child` | Account, messages from the teacher, FAQ, link another child |
+
+<img src="docs/screenshots/parent-dashboard.png" width="600" alt="Parent Dashboard" />
+
+## Teacher
+
+| Route | Screen |
+| --- | --- |
+| `/teacher` | Class overview |
+| `/teacher/students` | Class roster |
+| `/teacher/students/[studentId]` + `/progress`, `/reading-log`, `/roadmap`, `/interventions` | Per-student deep dive |
+| `/teacher/interventions` | Class-wide intervention planner |
+| `/teacher/library` | Reading Library (same component as the parent's, see below) |
+| `/teacher/reading-groups`, `/teacher/resources`, `/teacher/settings`, `/teacher/help` | Supporting pages |
+
+<img src="docs/screenshots/teacher-dashboard.png" width="600" alt="Teacher Dashboard" />
+<img src="docs/screenshots/student-profile.png" width="600" alt="Student Profile" />
+<img src="docs/screenshots/teacher-interventions.png" width="600" alt="Teacher Interventions" />
+
+## Reading Library (shared by parent + teacher)
+
+`components/library/LibraryBrowser.tsx` powers both `/teacher/library` and
+`/parent/library`. It's backed by `apps/web/lib/stories.ts` — **10 original
+stories, leveled 1–10**, each with real paragraph content, a genre, and a
+vocab focus.
+
+* **Filters are functional** — Level (banded), Genre, and Duration all
+  actually filter the grid, with a "Clear filters" reset.
+* **Preview** opens a modal with the full story text, not just a summary.
+* **Assign** is a toggle per story (mocked — no persistence yet).
+* **Parents only:** "Add Custom Book (PDF)" opens an upload modal (title +
+  level + PDF file) that adds the book to the grid alongside the built-in
+  stories. The file itself isn't persisted anywhere yet — see the `TODO` in
+  `UploadBookModal.tsx` for wiring it to Supabase Storage.
+
+<img src="docs/screenshots/reading-library.png" width="600" alt="Reading Library" />
+
+---
+
+# Dark Mode
+
+Every screen supports light and dark mode, toggled from a moon/sun button
+in each persistent nav shell (teacher, parent, learner, top app bar, and
+the `/login` role picker). It respects the OS `prefers-color-scheme` on
+first visit and persists the explicit choice to `localStorage`
+(`taleshift-theme`).
+
+Implementation: `apps/web/app/globals.css` defines the app's color tokens
+(`--color-app-bg`, `--color-text-primary`, etc.) once, then redefines them
+under a `.dark` class — so any component using the semantic tokens
+(`bg-app-bg`, `text-text-secondary`, `border-border-light`, …) re-themes
+automatically with no per-component `dark:` classes needed. Components that
+use raw Tailwind colors or arbitrary hex values (a few of the more
+illustration-heavy cards) have explicit `dark:` overrides added alongside
+them instead. `ThemeToggle` (`components/ui/ThemeToggle.tsx`) is the toggle
+button; a small inline script in `app/layout.tsx` applies the stored/system
+preference before paint to avoid a light-mode flash.
+
+<img src="docs/screenshots/dark-mode.png" width="600" alt="Dark mode" />
+
+---
+
+# Connecting Supabase
+
+The UI, schema, and API routes below are fully scaffolded against
+Supabase (Postgres + Auth) - nothing has been run against a live
+project yet. To connect one:
+
+1. **Create a Supabase project** at [supabase.com](https://supabase.com)
+   if you don't have one.
+2. **Fill in `apps/web/.env.local`** (copy from `.env.example` if you
+   haven't) with three things from your project's dashboard:
+   * `DATABASE_URL` - Project Settings -> Database -> Connection string
+     -> "URI" tab.
+   * `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` -
+     Project Settings -> API.
+   * `STUDENT_SESSION_SECRET` - any long random string, e.g.
+     `openssl rand -hex 32`.
+3. **Push the schema:**
+   ```bash
+   npm run db:push --workspace=@taleshift/db
+   ```
+   (or `npm run db:generate` first if you want to review the migration
+   SQL before applying it).
+4. **Turn off email confirmation** for faster local testing: Supabase
+   dashboard -> Authentication -> Providers -> Email -> disable
+   "Confirm email". Otherwise every sign-up needs to click a
+   confirmation link before they can log in.
+5. Restart `npm run dev`. Auth (`/login/parent`, `/login/teacher`,
+   `/login/sign-up`), the "Who's reading today?" student picker, "My
+   Children" / "Class Roster", and "Add Another Child" now read/write
+   real rows instead of the mocked fallbacks described in [What's
+   Deliberately Not Built](#whats-deliberately-not-built).
+
+**What's real once connected:**
+
+* Parent/teacher sign-up and login go through Supabase Auth
+  (`app/api/auth/*-signup`, `*-login`), and create a matching row in
+  `parents`/`teachers` (`packages/db/src/schema.ts`).
+* A child's 4-digit PIN is hashed with bcrypt and never stored or
+  compared in plain text or client-side (`app/api/auth/student-login`,
+  `lib/auth/student-session.ts`) - the learner gets their own signed,
+  httpOnly session cookie, separate from Supabase Auth, since children
+  don't have email+password accounts.
+* The parent sign-up questionnaire (age/gender/race/support needs) and
+  "Add Another Child" write directly into `learnerProfiles`.
+* "My Children" and "Class Roster" query `learnerProfiles` for the
+  signed-in parent/teacher, falling back to mock data only if the
+  query fails (e.g. not connected yet) - see the `loadChildren` /
+  `loadRoster` functions in `components/parent/ChildRoster.tsx` and
+  `components/roster/StudentRoster.tsx`.
+
+**What's still mocked even once connected** - see the `TODO(owner:
+unassigned)` comments at each site for specifics:
+
+* Reading/vocabulary stats, "status" (On Track/Excelling/Needs
+  Support), and fluency numbers everywhere - there's no analytics
+  pipeline over `readingSessions` yet, just the schema for one.
+* Story assignments, custom PDF book uploads (nothing is written to
+  Supabase Storage yet), messages, and intervention notes - the tables
+  exist (`assignments`, `customBooks`, `messages`,
+  `interventionNotes`) but the UI for them isn't wired to real queries.
+* `apps/web/lib/stories.ts`'s 10-story catalog is still a static
+  in-memory array, not read from the `stories` table.
 
 ---
 
@@ -198,8 +378,8 @@ Each package has an ownership boundary to reduce merge conflicts.
 | `packages/alignment_engine` | Shared core logic                           | Done, 5 tests passing                                                |
 | `packages/nlp_layer`        | Person 4                                    | Hedging + scoring done, 9 tests passing; comprehension check stubbed |
 | `packages/leveling_engine`  | Person 5                                    | Leveling rules + assignment resolution done, 10 tests passing        |
-| `packages/db`               | Person 5                                    | Schema includes classrooms/roster/assignments; not yet migrated      |
-| `apps/web`                  | Person 2 + everyone for their own API route | Routes wired, including classroom LMS; UI is placeholder             |
+| `packages/db`               | Person 5                                    | Schema covers parents/teachers/learners/classrooms/assignments/custom books/messages, plus typed query helpers (`src/queries.ts`); not yet migrated to a live Supabase project — see [Connecting Supabase](#connecting-supabase) |
+| `apps/web`                  | Person 2 + everyone for their own API route | Full UI built for all 3 personas + auth (see [UI Screens & Routes](#ui-screens--routes)); API routes wired but not yet connected to the UI; no real backend/auth yet — see [What's Deliberately Not Built](#whats-deliberately-not-built) |
 
 ---
 
@@ -483,6 +663,16 @@ Do not rely on another package's dependency installation.
 ---
 
 # What's Deliberately Not Built
+
+## Real Backend / Auth for the UI
+
+Parent/teacher auth, student PIN login, and the parent/teacher rosters
+are wired to Supabase (real Postgres Auth + a bcrypt-hashed PIN, no
+plain-text credentials in client code) - see
+[Connecting Supabase](#connecting-supabase) for what's real, what's
+still mocked, and how to point it at an actual project. Nothing in this
+repo has been run against a live Supabase project yet; it's scaffolded
+and ready to connect.
 
 ## Prosodic Confidence Scoring
 

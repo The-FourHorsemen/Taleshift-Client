@@ -10,21 +10,30 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@taleshift/asr-client": "*",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2",
     "@taleshift/alignment-engine": "*",
-    "@taleshift/nlp-layer": "*",
-    "@taleshift/leveling-engine": "*",
+    "@taleshift/asr-client": "*",
     "@taleshift/db": "*",
+    "@taleshift/leveling-engine": "*",
+    "@taleshift/nlp-layer": "*",
     "@taleshift/shared-types": "*",
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.33.0",
+    "jose": "^6.2.12",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "zod": "^3.23.0",
-    "drizzle-orm": "^0.33.0"
+    "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.6.0"
   }
 }

@@ -19,5 +19,8 @@
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "npm@10.9.7"
+  "packageManager": "npm@10.9.7",
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
+  }
 }

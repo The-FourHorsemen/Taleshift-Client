@@ -10,6 +10,15 @@ import { pgTable, text, integer, timestamp, jsonb, real } from "drizzle-orm/pg-c
  * see the anniversary project review for why that matters.
  */
 
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  role: text("role").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const stories = pgTable("stories", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
@@ -19,6 +28,9 @@ export const stories = pgTable("stories", {
 
 export const learnerProfiles = pgTable("learner_profiles", {
   id: text("id").primaryKey(),
+  guardianId: text("guardian_id")
+    .notNull()
+    .references(() => users.id),
   displayName: text("display_name").notNull(),
   currentLevel: integer("current_level").notNull().default(1),
   struggleWords: jsonb("struggle_words").$type<string[]>().notNull().default([]),
