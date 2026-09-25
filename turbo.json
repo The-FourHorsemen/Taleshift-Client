@@ -3,7 +3,15 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"]
+      "outputs": [".next/**", "dist/**"],
+      "env": ["DATABASE_URL"],
+      "passThroughEnv": [
+        "ANTHROPIC_API_KEY",
+        "AZURE_SPEECH_KEY",
+        "AZURE_SPEECH_REGION",
+        "STUDENT_SESSION_SECRET"
+      ]
+
     },
     "dev": {
       "cache": false,
