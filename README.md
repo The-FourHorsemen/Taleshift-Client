@@ -11,6 +11,7 @@ Adaptive literacy app built for the hackathon.
 * [Getting Started](#getting-started)
 * [Setup](#setup)
 * [Testing the App Locally](#testing-the-app-locally)
+* [Mock Accounts (MVP Auth)](#mock-accounts-mvp-auth)
 * [UI Screens & Routes](#ui-screens--routes)
 * [Dark Mode](#dark-mode)
 * [Connecting Supabase](#connecting-supabase)
@@ -128,15 +129,44 @@ Start at:
 http://localhost:3000/login
 ```
 
-and pick a role. The `/` route itself is the **Learner Home** screen (no auth
-gate yet — see [What's Deliberately Not Built](#whats-deliberately-not-built)).
+and log in as the parent or a child using the mock credentials below — see
+[Mock Accounts](#mock-accounts-mvp-auth). Real Supabase Auth has been
+deliberately removed for this MVP; login checks against hardcoded mock data
+instead (see [What's Deliberately Not Built](#whats-deliberately-not-built)).
 
 The UI is fully built out for all three personas (learner, parent, teacher)
 with mocked data — see [UI Screens & Routes](#ui-screens--routes) below for
-the full route list and screenshots. Nothing in `/api/*` is wired to the UI
-yet; those routes are tested directly (see [API Routes](#api-routes)).
+the full route list and screenshots.
 
 If a route in the table below 404s, something is actually broken.
+
+---
+
+# Mock Accounts (MVP Auth)
+
+Auth is mocked for this MVP — there's no real sign-up flow and no Supabase
+Auth call in the login path. `apps/web/lib/mock-data.ts` is the single
+source of truth; the login API routes
+(`app/api/auth/{parent-login,student-login}/route.ts`) just check submitted
+credentials against it.
+
+**Parent** — log in at `/login/parent`:
+
+| Field    | Value                  |
+| -------- | ---------------------- |
+| Email    | `parent@taleshift.dev` |
+| Password | `ReadWithMe123`        |
+
+**Children** — pick a name at `/login/student`, then enter the PIN:
+
+| Name  | Avatar | PIN    | Age | Grade   |
+| ----- | ------ | ------ | --- | ------- |
+| Alex  | 🐨     | `1234` | 8   | Grade 3 |
+| Jamie | 🦊     | `1234` | 10  | Grade 5 |
+
+Both children are linked to the mock parent above. To add more mock
+learners or change credentials, edit `MOCK_CHILDREN`/`MOCK_PARENT` in
+`apps/web/lib/mock-data.ts` — nothing else needs to change.
 
 ---
 
@@ -154,7 +184,7 @@ backend yet.
 | `/login` | Role picker — student / parent / teacher |
 | `/login/student` | "Who's reading today?" — pick your name, then enter your **PIN** |
 | `/login/parent`, `/login/teacher` | Email/password login |
-| `/login/sign-up` | Account creation — **parent flow is 3 steps**: account → link child(ren) → child support-needs questionnaire |
+| `/login/sign-up` | Account creation UI (parent flow is 3 steps: account → link child(ren) → child support-needs questionnaire) — **not wired**, use the mock accounts instead |
 | `/login/forgot-password` | Password reset |
 | `/logout` | Logged-out confirmation |
 
@@ -162,22 +192,21 @@ backend yet.
 <img src="docs/screenshots/student-pin-entry.png" width="320" alt="Student PIN entry" />
 <img src="docs/screenshots/signup-child-questionnaire.png" width="600" alt="Parent sign-up: child support-needs questionnaire" />
 
-**Student PIN protection:** each linked learner profile requires its own
-4-digit PIN before the app hands over that child's session — one student
-cannot open another student's profile from the shared picker screen.
-PINs are currently mock values held in client code
-(`components/auth/StudentLoginPicker.tsx`) — see the `TODO` there; this
-**must** move to server-side verification against a hashed PIN once
-Supabase auth is wired in.
+**Auth for this MVP is mocked** — see [Mock Accounts](#mock-accounts-mvp-auth).
+`/login/parent` and `/login/student` check submitted credentials against
+`apps/web/lib/mock-data.ts` instead of Supabase; the child's session is a
+plain httpOnly cookie holding the learner id
+(`apps/web/lib/auth/student-session.ts`), not a signed JWT.
 
 ## Learner (child)
 
 | Route | Screen |
 | --- | --- |
 | `/` | Home — continue reading, today's goal, weekly activity, recommended story |
-| `/read`, `/read/[storyId]` | Reading session (mic capture UI, live word highlight) |
+| `/read`, `/read/[storyId]` | Reading session — real mic recording, live word highlighting, word bookmarking |
+| `/summary/[storyId]` | Spoken book-summary recording, prompted after finishing a story |
 | `/feedback` | Post-reading summary ("Great job!") |
-| `/words`, `/words/practice` | My Words list + practice flow |
+| `/words`, `/words/practice` | My Words list (bookmarked + mocked words) + practice flow with pronunciation recording |
 | `/profile` | Learner profile — badges, streak, "Switch Reader" |
 
 <img src="docs/screenshots/learner-home.png" width="600" alt="Learner Home" />
@@ -188,6 +217,29 @@ The learner nav was rebuilt to match the teacher/parent shell pattern — a
 persistent sidebar at desktop widths (branding, streak, nav, "Switch
 Reader") with a mobile bottom bar at small widths, instead of the previous
 bottom-nav-only layout.
+
+### Reading Session mic features
+
+`/read/[storyId]` (`components/reading/ReadingSession.tsx`) records the
+child reading aloud via `MediaRecorder`, then runs the audio through the
+real ASR pipeline (transcribe → score → level) — see
+[Critical Path](#critical-path) below. On top of that:
+
+* **New words** (per-story vocab list) are highlighted **blue**.
+* **Struggle words** (from the learner's `struggleWords` on file, or a
+  fallback list if the DB isn't reachable) are highlighted **red**.
+* Any word can be **clicked to bookmark/un-bookmark** it
+  (`components/reading/HighlightedStoryText.tsx`) — persisted via
+  `POST /api/words/bookmark` to the `bookmarkedWords` table, and surfaced
+  on **My Words** (`/words`) for later practice.
+* On finishing, the full-reading audio is saved (best-effort, non-blocking)
+  via `POST /api/reading-summary` with `kind=full_reading`, then the child
+  is routed to `/summary/[storyId]` to record a spoken summary before
+  landing on `/feedback`.
+* **Practice My Words** (`/words/practice`,
+  `components/practice/VocabularyPractice.tsx`) lets the child record
+  themselves saying each word for self-check playback — local-only
+  (not uploaded), reset between words.
 
 ## Parent
 
@@ -264,9 +316,16 @@ preference before paint to avoid a light-mode flash.
 
 # Connecting Supabase
 
-The UI, schema, and API routes below are fully scaffolded against
-Supabase (Postgres + Auth) - nothing has been run against a live
-project yet. To connect one:
+**Note:** parent/student auth for this MVP is mocked (see
+[Mock Accounts](#mock-accounts-mvp-auth)) and does **not** go through
+Supabase Auth anymore — connecting a project below does not change how
+login works. What connecting Supabase *does* enable: persisting reading
+summaries, full-reading audio, and bookmarked words for real, plus the
+other schema-backed features listed below.
+
+The schema and API routes below are fully scaffolded against Supabase
+(Postgres) - nothing has been run against a live project yet. To connect
+one:
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com)
    if you don't have one.
@@ -284,37 +343,36 @@ project yet. To connect one:
    ```
    (or `npm run db:generate` first if you want to review the migration
    SQL before applying it).
-4. **Turn off email confirmation** for faster local testing: Supabase
-   dashboard -> Authentication -> Providers -> Email -> disable
-   "Confirm email". Otherwise every sign-up needs to click a
-   confirmation link before they can log in.
-5. Restart `npm run dev`. Auth (`/login/parent`, `/login/teacher`,
-   `/login/sign-up`), the "Who's reading today?" student picker, "My
-   Children" / "Class Roster", and "Add Another Child" now read/write
-   real rows instead of the mocked fallbacks described in [What's
-   Deliberately Not Built](#whats-deliberately-not-built).
+4. Restart `npm run dev`. "My Children" / "Class Roster" now read/write
+   real rows instead of the mocked fallbacks, and the features below start
+   persisting for real instead of gracefully falling back to mocks.
 
 **What's real once connected:**
 
-* Parent/teacher sign-up and login go through Supabase Auth
-  (`app/api/auth/*-signup`, `*-login`), and create a matching row in
-  `parents`/`teachers` (`packages/db/src/schema.ts`).
-* A child's 4-digit PIN is hashed with bcrypt and never stored or
-  compared in plain text or client-side (`app/api/auth/student-login`,
-  `lib/auth/student-session.ts`) - the learner gets their own signed,
-  httpOnly session cookie, separate from Supabase Auth, since children
-  don't have email+password accounts.
+* **Reading summaries and full-reading audio** — the spoken-summary
+  recording (`/summary/[storyId]`) and the full reading-session recording
+  (both via `POST /api/reading-summary`, distinguished by the `kind`
+  column: `"summary"` vs `"full_reading"`) are saved to the
+  `readingSummaries` table and surfaced on the parent's Reading Log
+  (`/parent/children/[childId]/reading-log`) and Recent Sessions card with
+  an inline audio player.
+* **Bookmarked words** — clicking a word on the reading page
+  (`POST /api/words/bookmark`) writes to the `bookmarkedWords` table and
+  shows up on `/words` for later practice.
 * The parent sign-up questionnaire (age/gender/race/support needs) and
   "Add Another Child" write directly into `learnerProfiles`.
-* "My Children" and "Class Roster" query `learnerProfiles` for the
-  signed-in parent/teacher, falling back to mock data only if the
-  query fails (e.g. not connected yet) - see the `loadChildren` /
-  `loadRoster` functions in `components/parent/ChildRoster.tsx` and
+* "My Children" and "Class Roster" query `learnerProfiles`, falling back
+  to mock data only if the query fails (e.g. not connected yet) - see the
+  `loadChildren` / `loadRoster` functions in
+  `components/parent/ChildRoster.tsx` and
   `components/roster/StudentRoster.tsx`.
 
 **What's still mocked even once connected** - see the `TODO(owner:
 unassigned)` comments at each site for specifics:
 
+* **Parent/student login itself** — see [Mock Accounts](#mock-accounts-mvp-auth);
+  this does not read from Supabase Auth regardless of whether a project is
+  connected.
 * Reading/vocabulary stats, "status" (On Track/Excelling/Needs
   Support), and fluency numbers everywhere - there's no analytics
   pipeline over `readingSessions` yet, just the schema for one.
@@ -322,24 +380,40 @@ unassigned)` comments at each site for specifics:
   Supabase Storage yet), messages, and intervention notes - the tables
   exist (`assignments`, `customBooks`, `messages`,
   `interventionNotes`) but the UI for them isn't wired to real queries.
-* `apps/web/lib/stories.ts`'s 10-story catalog is still a static
-  in-memory array, not read from the `stories` table.
+* `apps/web/lib/stories.ts`'s story catalog is still a static in-memory
+  array, not read from the `stories` table.
+* Recorded audio (summaries and full readings) is saved to
+  `apps/web/public/audio-summaries` / `apps/web/public/reading-audio` on
+  local disk, **not** Supabase Storage — an explicit MVP placeholder (see
+  `customBooks.fileUrl` in `packages/db/src/schema.ts` for the intended
+  long-term pattern). This won't survive across multiple server instances
+  or a redeploy.
 
 ---
 
 # API Routes
 
-API routes currently have no dedicated UI. Test them directly using tools such as `curl` or Postman.
+Most routes below are wired to the UI (mic recording, word bookmarking).
+The classroom routes still have no dedicated UI — test those directly
+using tools such as `curl` or Postman.
 
 | Route                                      | Method   | Notes                                                                          |
 | ------------------------------------------ | -------- | ------------------------------------------------------------------------------ |
-| `/api/asr`                                 | POST     | Stubbed; throws until Azure integration is completed                           |
+| `/api/asr`                                 | POST     | Proxies to the real FastAPI ASR service (`TALESHIFT_ASR_SERVICE_URL`); used by the reading session |
+| `/api/reading-summary`                     | POST     | Saves a child's recorded audio (`kind`: `"summary"` or `"full_reading"`) to disk + `readingSummaries`, best-effort transcription |
+| `/api/words/bookmark`                      | POST     | Toggles a bookmarked word for a learner (`bookmarkedWords` table)               |
 | `/api/score`                               | POST     | Requires `transcript` + `referenceText`; see `apps/web/app/api/score/route.ts` |
 | `/api/level`                               | POST     | Requires `{ score, currentLevel }`                                             |
 | `/api/nlp`                                 | POST     | Stubbed; throws until the comprehension check is completed                     |
 | `/api/classroom`                           | POST/GET | Create/list classrooms; requires `DATABASE_URL`                                |
 | `/api/classroom/[classroomId]/students`    | POST     | Add a student to a roster                                                      |
 | `/api/classroom/[classroomId]/assignments` | POST/GET | Assign a story or resolve a student's active assignments                       |
+
+The ASR service itself (`TALESHIFT_ASR_SERVICE_URL`, e.g.
+`http://localhost:8000`) is a separate Python FastAPI project, not part of
+this repo — `/api/asr` and `packages/asr_client` just call out to it.
+Without it set, `/api/asr` and the reading session's transcription fail
+closed (caught, surfaced as a failed/skipped step, never blocking the UI).
 
 ## Classroom API Requirements
 
@@ -374,7 +448,7 @@ Each package has an ownership boundary to reduce merge conflicts.
 | Package                     | Owner                                       | Status                                                               |
 | --------------------------- | ------------------------------------------- | -------------------------------------------------------------------- |
 | `packages/shared_types`     | Shared — changes need review                | Done, stable                                                         |
-| `packages/asr_client`       | Person 1 — ASR/validation lead              | Stubbed, blocked on Azure validation                                 |
+| `packages/asr_client`       | Person 1 — ASR/validation lead              | Real FastAPI HTTP client wired up (`transcribeAudio`); `assessPronunciation`/`transcribeSummaryAudio` still stubbed |
 | `packages/alignment_engine` | Shared core logic                           | Done, 5 tests passing                                                |
 | `packages/nlp_layer`        | Person 4                                    | Hedging + scoring done, 9 tests passing; comprehension check stubbed |
 | `packages/leveling_engine`  | Person 5                                    | Leveling rules + assignment resolution done, 10 tests passing        |
@@ -385,27 +459,28 @@ Each package has an ownership boundary to reduce merge conflicts.
 
 # Critical Path
 
-`asr_client` blocks the real data flow through:
+Real data flows through:
 
 ```text
-asr_client
+asr_client (real FastAPI HTTP client)
      ↓
 alignment_engine
      ↓
 nlp_layer
 ```
 
-Until the Azure validation is completed, other developers should build against mocked `TranscriptResult` objects.
+`packages/asr_client` now calls a live Python FastAPI ASR service
+(`TALESHIFT_ASR_SERVICE_URL`) instead of the originally-planned Azure
+Speech SDK integration — `assessPronunciation` and `transcribeSummaryAudio`
+are still stubs (see the `TODO`s in `packages/asr_client/src/client.ts`).
+If the ASR service isn't running locally, build against mocked
+`TranscriptResult` objects instead of blocking on it.
 
 The type definition can be found at:
 
 ```text
 packages/shared_types/src/transcript.ts
 ```
-
-**Do not wait for the ASR integration to be completed before continuing development.**
-
-Use mocked data and continue building your assigned functionality.
 
 ---
 
@@ -666,9 +741,17 @@ Do not rely on another package's dependency installation.
 
 ## Real Backend / Auth for the UI
 
-Parent/teacher auth, student PIN login, and the parent/teacher rosters
-are wired to Supabase (real Postgres Auth + a bcrypt-hashed PIN, no
-plain-text credentials in client code) - see
+**Parent/student auth is intentionally mocked for this MVP** — no
+Supabase Auth call in the login path, no sign-up flow, no hashed PINs.
+`/login/parent` and `/login/student` check credentials against
+`apps/web/lib/mock-data.ts` (see [Mock Accounts](#mock-accounts-mvp-auth)),
+and the child's session is a plain httpOnly cookie
+(`apps/web/lib/auth/student-session.ts`), not a signed JWT. This was a
+deliberate scope cut to unblock the rest of the app (recording, scoring,
+leveling) without needing a live Supabase project set up first.
+
+The teacher/parent rosters, reading summaries, and bookmarked words are
+still schema-backed against Supabase (Postgres only, not Auth) - see
 [Connecting Supabase](#connecting-supabase) for what's real, what's
 still mocked, and how to point it at an actual project. Nothing in this
 repo has been run against a live Supabase project yet; it's scaffolded
