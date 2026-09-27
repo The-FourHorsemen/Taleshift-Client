@@ -121,6 +121,31 @@ export const readingSessions = pgTable("reading_sessions", {
 });
 
 /**
+ * A child's spoken summary of a book, recorded right after they finish
+ * reading it (see apps/web/components/reading/SummaryRecorder.tsx).
+ * `audioUrl` is a path under apps/web/public/audio-summaries for now -
+ * an MVP placeholder for real object storage, same caveat as
+ * `customBooks.fileUrl` above. `transcript`/`status` are filled in
+ * best-effort after upload by packages/asr_client's
+ * `transcribeSummaryAudio` - a child's recording still counts as
+ * "sent" even if transcription fails or isn't wired up yet.
+ */
+export const readingSummaries = pgTable("reading_summaries", {
+  id: text("id").primaryKey(),
+  learnerProfileId: text("learner_profile_id")
+    .notNull()
+    .references(() => learnerProfiles.id),
+  storyId: text("story_id").references(() => stories.id),
+  customBookId: text("custom_book_id").references(() => customBooks.id),
+  storyTitle: text("story_title").notNull(),
+  audioUrl: text("audio_url").notNull(),
+  durationSeconds: real("duration_seconds"),
+  transcript: text("transcript"),
+  status: text("status", { enum: ["processing", "ready", "failed"] }).notNull().default("processing"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
  * LMS tables, added for teacher/student classroom features.
  * teacherId references teachers.id now that real teacher accounts exist.
  */

@@ -1,7 +1,9 @@
 interface Session {
   date: string;
   storyTitle: string;
-  durationMinutes: number;
+  durationMinutes: number | null;
+  /** Path/URL to the child's recorded book summary, if they made one. */
+  summaryAudioUrl?: string | null;
 }
 
 export function RecentSessionsCard({ sessions }: { sessions: Session[] }) {
@@ -19,7 +21,7 @@ export function RecentSessionsCard({ sessions }: { sessions: Session[] }) {
             <th className="pb-2 font-semibold">Date</th>
             <th className="pb-2 font-semibold">Story Title</th>
             <th className="pb-2 font-semibold">Duration</th>
-            <th className="pb-2 font-semibold">Action</th>
+            <th className="pb-2 font-semibold">Summary</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border-light">
@@ -27,11 +29,16 @@ export function RecentSessionsCard({ sessions }: { sessions: Session[] }) {
             <tr key={s.storyTitle}>
               <td className="py-3 text-text-secondary">{s.date}</td>
               <td className="py-3 font-semibold text-text-primary">{s.storyTitle}</td>
-              <td className="py-3 text-text-secondary">{s.durationMinutes} mins</td>
+              <td className="py-3 text-text-secondary">
+                {s.durationMinutes != null ? `${s.durationMinutes} mins` : "—"}
+              </td>
               <td className="py-3">
-                <button type="button" className="rounded-full border border-border-default px-3 py-1 text-xs font-semibold text-text-secondary">
-                  View Details
-                </button>
+                {s.summaryAudioUrl ? (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <audio controls preload="none" src={s.summaryAudioUrl} className="h-8 max-w-[200px]" />
+                ) : (
+                  <span className="text-xs text-text-secondary">No recording yet</span>
+                )}
               </td>
             </tr>
           ))}

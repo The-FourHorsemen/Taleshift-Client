@@ -13,6 +13,7 @@ interface ReadingSessionProps {
 }
 
 export function ReadingSession({
+  storyId,
   title,
   text,
   highlightedWord,
@@ -86,7 +87,7 @@ export function ReadingSession({
             </span>
           </button>
           <Link
-            href="/feedback"
+            href={`/summary/${storyId}`}
             className="absolute right-0 flex items-center justify-center rounded-full border-2 border-border-default bg-[rgba(248,250,252,0.8)] px-[26px] py-3.5 text-sm font-semibold tracking-[0.14px] text-text-secondary shadow-[0px_1px_2px_rgba(0,0,0,0.05)] backdrop-blur-[2px]"
           >
             Finish

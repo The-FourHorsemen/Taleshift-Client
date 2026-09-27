@@ -1,13 +1,11 @@
 /**
  * Owner: unassigned.
- * Verifies a learner's PIN and, on success, issues the signed student
- * session cookie (see lib/auth/student-session.ts). This intentionally
- * does NOT use Supabase Auth - see the comment on
- * packages/db/src/schema.ts's learnerProfiles.pinHash for why.
+ * MVP: no DB/bcrypt lookup - checks the PIN against the hardcoded mock
+ * children in lib/mock-data.ts. On success still issues the real
+ * signed student session cookie (see lib/auth/student-session.ts).
  */
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { getLearnerProfileById } from "@taleshift/db";
+import { findMockChild } from "@/lib/mock-data";
 import { createStudentSession } from "@/lib/auth/student-session";
 
 export async function POST(request: Request) {
@@ -17,13 +15,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "learnerProfileId and pin are required." }, { status: 400 });
   }
 
-  const learner = await getLearnerProfileById(learnerProfileId);
-  if (!learner || !learner.pinHash) {
+  const learner = findMockChild(learnerProfileId);
+  if (!learner) {
     return NextResponse.json({ error: "That profile isn't set up for PIN login yet." }, { status: 404 });
   }
 
-  const isValid = await bcrypt.compare(pin, learner.pinHash);
-  if (!isValid) {
+  if (learner.pin !== pin) {
     return NextResponse.json({ error: "Incorrect PIN." }, { status: 401 });
   }
 

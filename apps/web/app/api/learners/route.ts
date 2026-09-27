@@ -1,18 +1,14 @@
 /**
  * Owner: unassigned.
  * Powers the "Who's reading today?" picker
- * (components/auth/StudentLoginPicker.tsx). Only returns the fields
- * needed to render a tile - never the pinHash.
+ * (components/auth/StudentLoginPicker.tsx). MVP: returns the hardcoded
+ * mock children instead of querying the DB - never the PIN.
  */
 import { NextResponse } from "next/server";
-import { listLearnerProfilesWithPin } from "@taleshift/db";
+import { MOCK_CHILDREN } from "@/lib/mock-data";
 
-// Always hits the DB live - never statically prerender this route.
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const learners = await listLearnerProfilesWithPin();
-  return NextResponse.json(
-    learners.map((l) => ({ id: l.id, name: l.displayName, avatarEmoji: l.avatarEmoji })),
-  );
+  return NextResponse.json(MOCK_CHILDREN.map((c) => ({ id: c.id, name: c.name, avatarEmoji: c.avatarEmoji })));
 }

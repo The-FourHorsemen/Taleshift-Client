@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ParentPageShell } from "@/components/layout/parent/ParentPageShell";
 import { getChildrenForParent } from "@taleshift/db";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { MOCK_CHILDREN, MOCK_PARENT } from "@/lib/mock-data";
 
 interface LinkedChild {
   id: string;
@@ -15,12 +15,21 @@ interface LinkedChild {
 
 /**
  * Owner: unassigned.
- * Shown only if Supabase isn't connected yet / the query fails, so this
- * page still demos something instead of an empty roster.
+ * MVP: auth is mocked (see lib/mock-data.ts), so there's no real
+ * Supabase session to read the parent's id from. Used whenever the DB
+ * query below fails (e.g. the mock parent hasn't been seeded into
+ * Postgres yet), so this page still demos something instead of an
+ * empty roster.
  */
-const FALLBACK_CHILDREN: LinkedChild[] = [
-  { id: "alex", name: "Alex Johnson", age: 8, grade: "Grade 3", level: "Level M", status: "On Track", avatarEmoji: "🐨" },
-];
+const FALLBACK_CHILDREN: LinkedChild[] = MOCK_CHILDREN.map((c) => ({
+  id: c.id,
+  name: c.name,
+  age: c.age,
+  grade: c.grade,
+  level: "Level M",
+  status: "On Track" as const,
+  avatarEmoji: c.avatarEmoji,
+}));
 
 const STATUS_STYLES: Record<LinkedChild["status"], string> = {
   "On Track": "bg-brand-100 text-brand-700 dark:bg-slate-800 dark:text-brand-300",
@@ -30,13 +39,7 @@ const STATUS_STYLES: Record<LinkedChild["status"], string> = {
 
 async function loadChildren(): Promise<LinkedChild[]> {
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return FALLBACK_CHILDREN;
-
-    const rows = await getChildrenForParent(user.id);
+    const rows = await getChildrenForParent(MOCK_PARENT.id);
     if (rows.length === 0) return FALLBACK_CHILDREN;
 
     // TODO(unassigned): "status" needs a real progress/analytics

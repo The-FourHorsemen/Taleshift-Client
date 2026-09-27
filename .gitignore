@@ -1,2 +1,4 @@
 .next
 apps/web/.next
+node_modules
+.turbo

@@ -1,25 +1,16 @@
 /**
  * Owner: unassigned.
- * Backs "Add Another Child" (components/parent/AddChildForm.tsx) for
- * an already-signed-in parent - identifies the parent from their
- * Supabase session rather than trusting a client-supplied parentId.
+ * Backs "Add Another Child" (components/parent/AddChildForm.tsx).
+ * MVP: no Supabase session to identify the parent from - every child
+ * gets linked to the single hardcoded mock parent in lib/mock-data.ts.
  */
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createLearnerProfile } from "@taleshift/db";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { MOCK_PARENT } from "@/lib/mock-data";
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "You must be logged in to add a child." }, { status: 401 });
-  }
-
   const child = await request.json();
   if (!child?.name?.trim()) {
     return NextResponse.json({ error: "Child's name is required." }, { status: 400 });
@@ -30,7 +21,7 @@ export async function POST(request: Request) {
   const learner = await createLearnerProfile({
     id: randomUUID(),
     displayName: child.name,
-    parentId: user.id,
+    parentId: MOCK_PARENT.id,
     pinHash,
     age: child.age ? Number(child.age) : undefined,
     grade: child.grade || undefined,

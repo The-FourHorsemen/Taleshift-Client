@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { getDb } from "./client";
-import { parents, teachers, learnerProfiles, classrooms, classroomStudents } from "./schema";
+import { parents, teachers, learnerProfiles, classrooms, classroomStudents, readingSummaries } from "./schema";
 
 /**
  * Owner: person 5.
@@ -103,4 +103,43 @@ export async function getRosterForClassroom(classroomId: string) {
     .from(classroomStudents)
     .innerJoin(learnerProfiles, eq(classroomStudents.learnerProfileId, learnerProfiles.id))
     .where(eq(classroomStudents.classroomId, classroomId));
+}
+
+export interface NewReadingSummaryInput {
+  id: string;
+  learnerProfileId: string;
+  storyId?: string;
+  customBookId?: string;
+  storyTitle: string;
+  audioUrl: string;
+  durationSeconds?: number;
+}
+
+export async function createReadingSummary(input: NewReadingSummaryInput) {
+  const db = getDb();
+  const [row] = await db.insert(readingSummaries).values(input).returning();
+  return row;
+}
+
+export async function updateReadingSummaryTranscript(
+  id: string,
+  transcript: string,
+  status: "ready" | "failed",
+) {
+  const db = getDb();
+  const [row] = await db
+    .update(readingSummaries)
+    .set({ transcript, status })
+    .where(eq(readingSummaries.id, id))
+    .returning();
+  return row;
+}
+
+export async function getReadingSummariesForLearner(learnerProfileId: string) {
+  const db = getDb();
+  return db
+    .select()
+    .from(readingSummaries)
+    .where(eq(readingSummaries.learnerProfileId, learnerProfileId))
+    .orderBy(desc(readingSummaries.createdAt));
 }
