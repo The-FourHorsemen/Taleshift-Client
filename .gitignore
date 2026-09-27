@@ -2,3 +2,8 @@
 apps/web/.next
 node_modules
 .turbo
+
+# Locally recorded audio from the reading-summary / reading-session /
+# vocabulary-practice mic features - real user recordings, not source.
+apps/web/public/audio-summaries
+apps/web/public/reading-audio
