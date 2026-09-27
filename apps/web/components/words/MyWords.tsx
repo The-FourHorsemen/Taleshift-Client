@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { ChildShell } from "@/components/layout/child/ChildShell";
 
-interface WordEntry {
+export interface WordEntry {
   word: string;
   meaning: string;
   status: "Mastered" | "Learning";
 }
 
-const WORDS: WordEntry[] = [
+export const MOCK_WORDS: WordEntry[] = [
   { word: "Curious", meaning: "Eager to learn or know something.", status: "Mastered" },
   { word: "Discover", meaning: "To find something for the first time.", status: "Mastered" },
   { word: "Journey", meaning: "A trip from one place to another.", status: "Learning" },
@@ -20,17 +20,17 @@ const STATUS_STYLES: Record<WordEntry["status"], string> = {
   Learning: "bg-brand-100 text-brand-700 dark:bg-slate-800 dark:text-brand-300",
 };
 
-export function MyWords({ learnerName = "Alex" }: { learnerName?: string }) {
+export function MyWords({ learnerName = "Alex", words = MOCK_WORDS }: { learnerName?: string; words?: WordEntry[] }) {
   return (
     <ChildShell active="Words" learnerName={learnerName}>
       <div className="flex w-full max-w-2xl flex-col gap-6 px-6 pt-8">
         <div>
           <h1 className="font-display text-[28px] font-bold text-brand-600 dark:text-brand-400">My Words</h1>
-          <p className="text-text-secondary dark:text-slate-400">{WORDS.length} words you&apos;ve learned so far.</p>
+          <p className="text-text-secondary dark:text-slate-400">{words.length} words you&apos;ve learned so far.</p>
         </div>
 
         <div className="flex flex-col gap-3">
-          {WORDS.map((entry) => (
+          {words.map((entry) => (
             <div
               key={entry.word}
               className="flex items-center justify-between rounded-xl border border-border-light bg-white p-4 shadow-[0px_1px_1px_rgba(0,0,0,0.05)] dark:border-slate-700 dark:bg-slate-900"

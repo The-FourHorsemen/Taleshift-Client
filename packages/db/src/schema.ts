@@ -142,6 +142,27 @@ export const readingSummaries = pgTable("reading_summaries", {
   durationSeconds: real("duration_seconds"),
   transcript: text("transcript"),
   status: text("status", { enum: ["processing", "ready", "failed"] }).notNull().default("processing"),
+  /**
+   * "summary" = the post-reading spoken recap (SummaryRecorder.tsx).
+   * "full_reading" = the child reading the whole book aloud
+   * (ReadingSession.tsx), uploaded via app/api/asr/route.ts.
+   */
+  kind: text("kind", { enum: ["summary", "full_reading"] }).notNull().default("summary"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
+ * A word a child tapped while reading to flag "I don't know this one" -
+ * surfaced back on the My Words page (components/words/MyWords.tsx) so
+ * they can practice it later. `word` is stored lowercased.
+ */
+export const bookmarkedWords = pgTable("bookmarked_words", {
+  id: text("id").primaryKey(),
+  learnerProfileId: text("learner_profile_id")
+    .notNull()
+    .references(() => learnerProfiles.id),
+  word: text("word").notNull(),
+  storyId: text("story_id").references(() => stories.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeftIcon, SpeakerIcon, CheckIcon } from "@/components/icons/PracticeIcons";
+import { useAudioRecorder } from "@/lib/hooks/useAudioRecorder";
 
 export interface VocabWord {
   word: string;
@@ -14,8 +15,19 @@ export interface VocabWord {
 
 export function VocabularyPractice({ words }: { words: VocabWord[] }) {
   const [index, setIndex] = useState(0);
+  const recorder = useAudioRecorder();
   const current = words[index]!;
   const isLast = index === words.length - 1;
+
+  useEffect(() => {
+    recorder.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
+  function handleRecordClick() {
+    if (recorder.status === "recording") recorder.stop();
+    else recorder.start();
+  }
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center bg-[#f8fafc]">
@@ -59,13 +71,39 @@ export function VocabularyPractice({ words }: { words: VocabWord[] }) {
             </p>
           </div>
 
-          <button
-            type="button"
-            className="mt-auto flex h-14 w-full items-center justify-center gap-2 rounded-full bg-brand-600 text-base font-bold text-white shadow-[0px_4px_0px_#004395]"
-          >
-            <Image src="/icons/reading-session/mic.svg" alt="" width={16} height={22} />
-            Record &amp; Say it
-          </button>
+          {recorder.status === "stopped" && recorder.audioUrl ? (
+            <div className="mt-auto flex w-full flex-col items-center gap-3">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <audio controls src={recorder.audioUrl} className="w-full" />
+              <button
+                type="button"
+                onClick={() => recorder.reset()}
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-full border-2 border-border-default text-base font-bold text-text-secondary"
+              >
+                <Image src="/icons/reading-session/mic.svg" alt="" width={16} height={22} />
+                Record Again
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleRecordClick}
+              disabled={recorder.status === "requesting"}
+              className={`mt-auto flex h-14 w-full items-center justify-center gap-2 rounded-full text-base font-bold text-white shadow-[0px_4px_0px_#004395] disabled:opacity-60 ${
+                recorder.status === "recording" ? "bg-red-600" : "bg-brand-600"
+              }`}
+            >
+              <Image src="/icons/reading-session/mic.svg" alt="" width={16} height={22} />
+              {recorder.status === "recording"
+                ? `Stop Recording (${recorder.seconds}s)`
+                : recorder.status === "requesting"
+                  ? "Listening..."
+                  : "Record & Say it"}
+            </button>
+          )}
+          {recorder.errorMessage && (
+            <p className="text-center text-xs font-semibold text-danger-600">{recorder.errorMessage}</p>
+          )}
         </div>
 
         <div className="mt-6 flex items-center justify-between">

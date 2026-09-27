@@ -1,6 +1,14 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { getDb } from "./client";
-import { parents, teachers, learnerProfiles, classrooms, classroomStudents, readingSummaries } from "./schema";
+import {
+  parents,
+  teachers,
+  learnerProfiles,
+  classrooms,
+  classroomStudents,
+  readingSummaries,
+  bookmarkedWords,
+} from "./schema";
 
 /**
  * Owner: person 5.
@@ -113,6 +121,7 @@ export interface NewReadingSummaryInput {
   storyTitle: string;
   audioUrl: string;
   durationSeconds?: number;
+  kind?: "summary" | "full_reading";
 }
 
 export async function createReadingSummary(input: NewReadingSummaryInput) {
@@ -142,4 +151,39 @@ export async function getReadingSummariesForLearner(learnerProfileId: string) {
     .from(readingSummaries)
     .where(eq(readingSummaries.learnerProfileId, learnerProfileId))
     .orderBy(desc(readingSummaries.createdAt));
+}
+
+export async function getBookmarkedWordsForLearner(learnerProfileId: string) {
+  const db = getDb();
+  return db
+    .select()
+    .from(bookmarkedWords)
+    .where(eq(bookmarkedWords.learnerProfileId, learnerProfileId))
+    .orderBy(desc(bookmarkedWords.createdAt));
+}
+
+export interface NewBookmarkedWordInput {
+  id: string;
+  learnerProfileId: string;
+  word: string;
+  storyId?: string;
+}
+
+export async function addBookmarkedWord(input: NewBookmarkedWordInput) {
+  const db = getDb();
+  const existing = await db
+    .select()
+    .from(bookmarkedWords)
+    .where(and(eq(bookmarkedWords.learnerProfileId, input.learnerProfileId), eq(bookmarkedWords.word, input.word)));
+  if (existing[0]) return existing[0];
+
+  const [row] = await db.insert(bookmarkedWords).values(input).returning();
+  return row;
+}
+
+export async function removeBookmarkedWord(learnerProfileId: string, word: string) {
+  const db = getDb();
+  await db
+    .delete(bookmarkedWords)
+    .where(and(eq(bookmarkedWords.learnerProfileId, learnerProfileId), eq(bookmarkedWords.word, word)));
 }
