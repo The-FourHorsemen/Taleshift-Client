@@ -12,9 +12,8 @@ export const WordResultSchema = z.object({
   startMs: z.number().nonnegative(),
   endMs: z.number().nonnegative(),
   confidence: z.number().min(0).max(1),
-  // Azure Pronunciation Assessment specific scores, optional so this
-  // type still works if a team member swaps in a plain ASR provider
-  // during testing week.
+  // Pronunciation-assessment scores from the ASR service; optional so
+  // plain transcript-only providers still fit this shape.
   accuracyScore: z.number().min(0).max(100).optional(),
   fluencyScore: z.number().min(0).max(100).optional(),
 });

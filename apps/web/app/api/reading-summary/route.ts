@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   const storyId = formData.get("storyId");
   const storyTitle = formData.get("storyTitle");
   const durationSeconds = formData.get("durationSeconds");
+  const kind = formData.get("kind");
 
   if (!(audio instanceof Blob) || typeof learnerProfileId !== "string" || typeof storyTitle !== "string") {
     return NextResponse.json(
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
       storyTitle,
       audioUrl,
       durationSeconds: typeof durationSeconds === "string" ? Number(durationSeconds) : undefined,
+      kind: kind === "full_reading" ? "full_reading" : "summary",
     });
   } catch (err) {
     // The recording is already saved to disk even if the DB write

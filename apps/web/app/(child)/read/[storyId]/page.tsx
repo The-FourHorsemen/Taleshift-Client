@@ -1,22 +1,24 @@
 /**
  * Owner: person 2 (frontend and reading UI).
  *
- * Title/text/newWords are still hardcoded like the rest of the (child)
- * route group - TODO(person-2): pull the real story record and its
- * curated vocab list via @taleshift/db once the story catalog is
- * wired up. struggleWords/bookmarkedWords are real (best-effort,
- * falling back to a small mocked list if the DB isn't reachable).
+ * Loads story copy from the in-memory catalog and hands mic capture /
+ * ASR → score → level wiring to ReadingSession. struggleWords/
+ * bookmarkedWords come from @taleshift/db (best-effort, falling back
+ * to a small mocked list if the DB isn't reachable) - see
+ * lib/hooks and components/reading/HighlightedStoryText.tsx.
  */
+import { notFound } from "next/navigation";
 import { ReadingSession } from "@/components/reading/ReadingSession";
+import { getStoryById } from "@/lib/stories";
 import { getLearnerProfileById, getBookmarkedWordsForLearner } from "@taleshift/db";
 import { MOCK_CHILDREN } from "@/lib/mock-data";
 
-const STORY_TITLE = "The Lost Explorer";
-const STORY_TEXT =
-  "The ancient map led them deep into the heart of the jungle. Everywhere they looked, there were strange plants and mysterious shadows dancing across the path. Amelia held her compass tight, hoping it would point the way home before the sun disappeared below the dense canopy.";
-
-// This story's introduced vocabulary - highlighted blue in the text.
-const NEW_WORDS = ["ancient", "mysterious", "compass", "canopy"];
+// Vocabulary each story introduces - highlighted blue in the text.
+// TODO(person-2): move this onto the story catalog itself once it has
+// a real per-story vocab list instead of just `vocabFocus`'s category label.
+const NEW_WORDS_BY_STORY: Record<string, string[]> = {
+  "the-lost-explorer": ["ancient", "mysterious", "compass", "canopy"],
+};
 
 // Shown if this learner has no struggleWords on file yet (or the DB
 // isn't reachable), so the highlight demoes something.
@@ -43,19 +45,26 @@ export default async function ReadStoryPage({
 }: {
   params: { storyId: string };
 }) {
+  const story = getStoryById(params.storyId);
+  if (!story) notFound();
+
+  const text = story.paragraphs.join(" ");
   const learnerProfileId = MOCK_CHILDREN[0]!.id;
   const { struggleWords, bookmarkedWords } = await loadWordLists(learnerProfileId);
 
   return (
     <ReadingSession
-      storyId={params.storyId}
+      storyId={story.id}
       learnerProfileId={learnerProfileId}
-      title={STORY_TITLE}
-      text={STORY_TEXT}
-      newWords={NEW_WORDS}
+      title={story.title}
+      text={text}
+      newWords={NEW_WORDS_BY_STORY[story.id] ?? []}
       struggleWords={struggleWords}
       initialBookmarkedWords={bookmarkedWords}
-      progressPercent={64}
+      currentLevel={story.level}
+      expectedMinutes={story.durationMinutes}
+      learnerName="Alex"
+      dayStreak={4}
     />
   );
 }

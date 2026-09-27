@@ -9,6 +9,9 @@ interface PostReadingSummaryProps {
   dayStreak: number;
   pointsEarned: number;
   newWords: string[];
+  /** Optional leveling copy from /api/level. */
+  newLevel?: number;
+  levelReason?: string;
 }
 
 export function PostReadingSummary({
@@ -18,6 +21,8 @@ export function PostReadingSummary({
   dayStreak,
   pointsEarned,
   newWords,
+  newLevel,
+  levelReason,
 }: PostReadingSummaryProps) {
   return (
     <ChildShell active="Read" learnerName={learnerName} streakDays={dayStreak}>
@@ -60,23 +65,40 @@ export function PostReadingSummary({
             </div>
           </div>
 
+          {(newLevel !== undefined || levelReason) && (
+            <div className="col-span-2 flex flex-col gap-1 rounded-xl border border-[#e1e2ec] bg-white p-[17px] shadow-[0px_4px_6px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-900">
+              {newLevel !== undefined && (
+                <p className="font-display text-xl font-semibold text-[#191b23] dark:text-slate-100">
+                  Next level: {newLevel}
+                </p>
+              )}
+              {levelReason && (
+                <p className="text-sm text-text-secondary dark:text-slate-400">{levelReason}</p>
+              )}
+            </div>
+          )}
+
           <div className="col-span-2 flex flex-col gap-4 rounded-xl border border-brand-100 bg-indigo-100 p-[21px] shadow-[0px_4px_6px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800">
             <div className="flex items-center gap-3">
               <Image src="/icons/feedback/vocab-book.svg" alt="" width={18.15} height={19} />
               <h3 className="font-display text-2xl font-semibold text-brand-700 dark:text-brand-300">
-                {newWords.length} new words learned
+                {newWords.length > 0
+                  ? `${newWords.length} words to practice`
+                  : "No struggle words this time"}
               </h3>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {newWords.map((word) => (
-                <span
-                  key={word}
-                  className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[#2170e4] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] dark:bg-slate-900 dark:text-brand-400"
-                >
-                  {word}
-                </span>
-              ))}
-            </div>
+            {newWords.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {newWords.map((word) => (
+                  <span
+                    key={word}
+                    className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[#2170e4] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] dark:bg-slate-900 dark:text-brand-400"
+                  >
+                    {word}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

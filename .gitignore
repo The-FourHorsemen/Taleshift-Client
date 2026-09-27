@@ -1,7 +1,14 @@
 .next
 apps/web/.next
 node_modules
+apps/api/node_modules
+apps/web/node_modules
+.env
+.env.local
+apps/web/.env.local
 .turbo
+**/.turbo
+*.tsbuildinfo
 
 # Locally recorded audio from the reading-summary / reading-session /
 # vocabulary-practice mic features - real user recordings, not source.

@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { useAudioRecorder } from "@/lib/hooks/useAudioRecorder";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CompositeScore, TranscriptResult } from "@taleshift/shared-types";
+import { saveReadingResult, type LevelRecommendationResult } from "@/lib/reading-result";
 import { HighlightedStoryText } from "@/components/reading/HighlightedStoryText";
 
 interface ReadingSessionProps {
@@ -17,7 +18,33 @@ interface ReadingSessionProps {
   struggleWords: string[];
   /** Words the child already bookmarked from a previous session. */
   initialBookmarkedWords: string[];
-  progressPercent: number;
+  /** Learner reading level used for /api/level. Defaults to story level. */
+  currentLevel: number;
+  learnerName?: string;
+  dayStreak?: number;
+  /** Soft target for the progress bar while recording (minutes). */
+  expectedMinutes?: number;
+}
+
+type ApiEnvelope<T> = { success: boolean; data?: T; error?: string };
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json()) as ApiEnvelope<T>;
+  if (!res.ok || !json.success || json.data === undefined) {
+    throw new Error(json.error ?? `Request to ${url} failed`);
+  }
+  return json.data;
+}
+
+function pickRecorderMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t));
 }
 
 export function ReadingSession({
@@ -28,23 +55,25 @@ export function ReadingSession({
   newWords,
   struggleWords,
   initialBookmarkedWords,
-  progressPercent,
+  currentLevel,
+  learnerName = "Alex",
+  dayStreak = 4,
+  expectedMinutes = 10,
 }: ReadingSessionProps) {
   const router = useRouter();
-  const recorder = useAudioRecorder();
-  const [bookmarkedWords, setBookmarkedWords] = useState(() => new Set(initialBookmarkedWords));
-  const [isFinishing, setIsFinishing] = useState(false);
-  const hasStartedRef = useRef(false);
+  const sessionIdRef = useRef(
+    typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `session-${Date.now()}`,
+  );
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const recordingStartedAtRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    // Start capturing as soon as the child opens the story - the mic
-    // button below just pauses/resumes this, it doesn't start a
-    // separate recording.
-    if (hasStartedRef.current) return;
-    hasStartedRef.current = true;
-    recorder.start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [isListening, setIsListening] = useState(false);
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [bookmarkedWords, setBookmarkedWords] = useState(() => new Set(initialBookmarkedWords));
 
   function toggleWordBookmark(word: string) {
     const nextBookmarked = !bookmarkedWords.has(word);
@@ -65,32 +94,201 @@ export function ReadingSession({
     });
   }
 
-  function toggleMic() {
-    if (recorder.status === "recording") recorder.pause();
-    else if (recorder.status === "paused") recorder.resume();
-    else if (recorder.status === "idle" || recorder.status === "error") recorder.start();
-  }
+  const stopTracks = useCallback(() => {
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+  }, []);
 
-  async function handleFinish() {
-    setIsFinishing(true);
-    try {
-      const blob = await recorder.stop();
-      if (blob) {
-        const formData = new FormData();
-        formData.append("audio", blob, "reading.webm");
-        formData.append("storyId", storyId);
-        formData.append("sessionId", crypto.randomUUID());
-        formData.append("referenceText", text);
-        formData.append("learnerProfileId", learnerProfileId);
-        formData.append("storyTitle", title);
-        await fetch("/api/asr", { method: "POST", body: formData }).catch(() => {});
-      }
-    } finally {
-      router.push(`/summary/${storyId}`);
+  const stopRecorder = useCallback((): Promise<Blob | null> => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      const chunks = chunksRef.current;
+      if (chunks.length === 0) return Promise.resolve(null);
+      const type = chunks[0]?.type || "audio/webm";
+      return Promise.resolve(new Blob(chunks, { type }));
     }
-  }
 
-  const isListening = recorder.status === "recording";
+    return new Promise((resolve) => {
+      recorder.addEventListener(
+        "stop",
+        () => {
+          const chunks = chunksRef.current;
+          const type = recorder.mimeType || chunks[0]?.type || "audio/webm";
+          resolve(chunks.length > 0 ? new Blob(chunks, { type }) : null);
+          mediaRecorderRef.current = null;
+          stopTracks();
+        },
+        { once: true },
+      );
+      recorder.stop();
+    });
+  }, [stopTracks]);
+
+  const startRecording = useCallback(async () => {
+    setError(null);
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setError("Microphone recording isn't supported in this browser.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      chunksRef.current = [];
+
+      const mimeType = pickRecorderMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current = recorder;
+      recordingStartedAtRef.current = Date.now();
+      recorder.start(250);
+      setIsListening(true);
+    } catch (err) {
+      console.error("Mic permission / start error:", err);
+      setError("Couldn't access the microphone. Check permissions and try again.");
+      setIsListening(false);
+      stopTracks();
+    }
+  }, [stopTracks]);
+
+  const pauseRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state === "recording") {
+      recorder.pause();
+    }
+    setIsListening(false);
+  }, []);
+
+  const resumeRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state === "paused") {
+      recorder.resume();
+      setIsListening(true);
+      setError(null);
+      return;
+    }
+    void startRecording();
+  }, [startRecording]);
+
+  const toggleListening = useCallback(() => {
+    if (isSubmitting) return;
+    if (isListening) {
+      pauseRecording();
+    } else {
+      resumeRecording();
+    }
+  }, [isListening, isSubmitting, pauseRecording, resumeRecording]);
+
+  // Soft progress while recording against expected duration.
+  useEffect(() => {
+    if (!isListening) return;
+    const targetMs = Math.max(expectedMinutes, 1) * 60 * 1000;
+    const id = window.setInterval(() => {
+      const started = recordingStartedAtRef.current;
+      if (!started) return;
+      const pct = Math.min(99, Math.floor(((Date.now() - started) / targetMs) * 100));
+      setProgressPercent(pct);
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [isListening, expectedMinutes]);
+
+  const startRecordingRef = useRef(startRecording);
+  startRecordingRef.current = startRecording;
+  const stopTracksRef = useRef(stopTracks);
+  stopTracksRef.current = stopTracks;
+
+  useEffect(() => {
+    void startRecordingRef.current();
+    return () => {
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.ondataavailable = null;
+        try {
+          recorder.stop();
+        } catch {
+          // already stopped
+        }
+      }
+      mediaRecorderRef.current = null;
+      stopTracksRef.current();
+    };
+  }, []);
+
+  const handleFinish = useCallback(async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setError(null);
+    setIsListening(false);
+
+    try {
+      const audioBlob = await stopRecorder();
+      if (!audioBlob || audioBlob.size === 0) {
+        throw new Error("No audio was recorded. Tap the mic and try reading again.");
+      }
+
+      const extension = audioBlob.type.includes("mp4") ? "mp4" : audioBlob.type.includes("ogg") ? "ogg" : "webm";
+
+      // Persist the raw read-aloud audio for the parent's reading log -
+      // fire-and-forget so a demo-env DB/disk hiccup here never blocks
+      // the real transcribe -> score -> level pipeline below.
+      const persistForm = new FormData();
+      persistForm.append("audio", audioBlob, `reading-${sessionIdRef.current}.${extension}`);
+      persistForm.append("learnerProfileId", learnerProfileId);
+      persistForm.append("storyId", storyId);
+      persistForm.append("storyTitle", title);
+      persistForm.append("kind", "full_reading");
+      fetch("/api/reading-summary", { method: "POST", body: persistForm }).catch(() => {});
+
+      const formData = new FormData();
+      formData.append("audioFile", audioBlob, `reading-${sessionIdRef.current}.${extension}`);
+      formData.append("storyId", storyId);
+      formData.append("sessionId", sessionIdRef.current);
+      formData.append("referenceText", text);
+
+      const elapsedMs = recordingStartedAtRef.current ? Date.now() - recordingStartedAtRef.current : 0;
+
+      const asrRes = await fetch("/api/asr", { method: "POST", body: formData });
+      const asrJson = (await asrRes.json()) as ApiEnvelope<TranscriptResult>;
+      if (!asrRes.ok || !asrJson.success || !asrJson.data) {
+        throw new Error(asrJson.error ?? "Failed to transcribe audio.");
+      }
+      const transcript: TranscriptResult = {
+        ...asrJson.data,
+        durationMs: asrJson.data.durationMs || elapsedMs,
+      };
+
+      const score = await postJson<CompositeScore>("/api/score", {
+        transcript,
+        referenceText: text,
+      });
+
+      const level = await postJson<LevelRecommendationResult>("/api/level", {
+        score: score.overallScore,
+        currentLevel,
+      });
+
+      saveReadingResult({
+        storyId,
+        storyTitle: title,
+        learnerName,
+        dayStreak,
+        transcript,
+        score,
+        level,
+      });
+
+      setProgressPercent(100);
+      router.push(`/summary/${storyId}`);
+    } catch (err) {
+      console.error("Reading session finish error:", err);
+      setError(err instanceof Error ? err.message : "Something went wrong finishing the session.");
+      setIsSubmitting(false);
+    }
+  }, [currentLevel, dayStreak, learnerName, learnerProfileId, router, stopRecorder, storyId, text, title]);
 
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-[#f8fafc]">
@@ -146,22 +344,23 @@ export function ReadingSession({
               onToggleWord={toggleWordBookmark}
             />
           </p>
+          {error && (
+            <p role="alert" className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
         </article>
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col items-center gap-2 bg-gradient-to-t from-[#f8fafc] from-0% via-[rgba(248,250,252,0.95)] via-50% to-[rgba(248,250,252,0)] px-6 pb-10 pt-14">
-        {recorder.errorMessage && (
-          <p className="max-w-sm text-center text-xs font-semibold text-danger-600">
-            {recorder.errorMessage} Your reading won&apos;t be recorded, but you can keep going.
-          </p>
-        )}
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-end justify-center bg-gradient-to-t from-[#f8fafc] from-0% via-[rgba(248,250,252,0.95)] via-50% to-[rgba(248,250,252,0)] px-6 pb-10 pt-14">
         <div className="relative flex w-full max-w-[500px] items-center justify-center">
           <button
             type="button"
-            onClick={toggleMic}
+            onClick={toggleListening}
+            disabled={isSubmitting}
             aria-pressed={isListening}
-            aria-label={isListening ? "Pause recording" : "Start or resume recording"}
-            className="relative flex size-24 items-center justify-center rounded-full"
+            aria-label={isListening ? "Pause listening" : "Start listening"}
+            className="relative flex size-24 items-center justify-center rounded-full disabled:opacity-60"
           >
             {isListening && (
               <>
@@ -175,11 +374,11 @@ export function ReadingSession({
           </button>
           <button
             type="button"
-            onClick={handleFinish}
-            disabled={isFinishing}
+            onClick={() => void handleFinish()}
+            disabled={isSubmitting}
             className="absolute right-0 flex items-center justify-center rounded-full border-2 border-border-default bg-[rgba(248,250,252,0.8)] px-[26px] py-3.5 text-sm font-semibold tracking-[0.14px] text-text-secondary shadow-[0px_1px_2px_rgba(0,0,0,0.05)] backdrop-blur-[2px] disabled:opacity-60"
           >
-            {isFinishing ? "Saving..." : "Finish"}
+            {isSubmitting ? "Scoring…" : "Finish"}
           </button>
         </div>
       </div>
