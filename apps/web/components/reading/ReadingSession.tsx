@@ -290,6 +290,28 @@ export function ReadingSession({
     }
   }, [currentLevel, dayStreak, learnerName, learnerProfileId, router, stopRecorder, storyId, text, title]);
 
+  const handleSkip = useCallback(() => {
+    if (isSubmitting) return;
+    setIsListening(false);
+
+    // No transcript/score to persist - the child chose not to read right
+    // now, so skip straight to the spoken-summary step without touching
+    // ASR/score/level or saving a reading result.
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.ondataavailable = null;
+      try {
+        recorder.stop();
+      } catch {
+        // already stopped
+      }
+    }
+    mediaRecorderRef.current = null;
+    stopTracks();
+
+    router.push(`/summary/${storyId}`);
+  }, [isSubmitting, router, storyId, stopTracks]);
+
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-[#f8fafc]">
       <header className="z-20 flex w-full items-center justify-between px-6 pb-4 pt-8">
@@ -354,6 +376,14 @@ export function ReadingSession({
 
       <div className="fixed inset-x-0 bottom-0 z-30 flex items-end justify-center bg-gradient-to-t from-[#f8fafc] from-0% via-[rgba(248,250,252,0.95)] via-50% to-[rgba(248,250,252,0)] px-6 pb-10 pt-14">
         <div className="relative flex w-full max-w-[500px] items-center justify-center">
+          <button
+            type="button"
+            onClick={handleSkip}
+            disabled={isSubmitting}
+            className="absolute left-0 flex items-center justify-center rounded-full px-3 py-3.5 text-sm font-semibold tracking-[0.14px] text-text-secondary underline decoration-dotted underline-offset-4 disabled:opacity-60"
+          >
+            Not now
+          </button>
           <button
             type="button"
             onClick={toggleListening}
