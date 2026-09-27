@@ -6,7 +6,7 @@ apps/web/node_modules
 .env
 .env.local
 apps/web/.env.local
-.turbo
+.turbo 
 **/.turbo
 *.tsbuildinfo
 

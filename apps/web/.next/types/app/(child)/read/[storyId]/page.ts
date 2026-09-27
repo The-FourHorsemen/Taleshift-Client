@@ -1,4 +1,4 @@
-// File: C:\Users\This Pc\Downloads\taleshift_app (1)\taleshift_app\apps\web\app\(child)\read\[storyId]\page.tsx
+// File: C:\Users\This Pc\OneDrive\Documents\Projects\Taleshift-Client\apps\web\app\(child)\read\[storyId]\page.tsx
 import * as entry from '../../../../../../app/(child)/read/[storyId]/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

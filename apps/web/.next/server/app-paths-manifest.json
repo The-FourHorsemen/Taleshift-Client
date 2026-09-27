@@ -1,4 +1,8 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/(child)/read/[storyId]/page": "app/(child)/read/[storyId]/page.js"
+  "/(child)/read/[storyId]/page": "app/(child)/read/[storyId]/page.js",
+  "/(dashboard)/progress/page": "app/(dashboard)/progress/page.js",
+  "/login/student/page": "app/login/student/page.js",
+  "/(child)/page": "app/(child)/page.js",
+  "/(child)/words/page": "app/(child)/words/page.js",
+  "/(child)/words/practice/page": "app/(child)/words/practice/page.js"
 }
