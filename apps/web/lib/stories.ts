@@ -214,5 +214,9 @@ export const STORIES: Story[] = [
 ];
 
 export function getStoryById(id: string): Story | undefined {
-  return STORIES.find((s) => s.id === id);
+  const aliases: Record<string, string> = {
+    "lost-explorer": "the-lost-explorer",
+  };
+  const resolved = aliases[id] ?? id;
+  return STORIES.find((s) => s.id === resolved);
 }

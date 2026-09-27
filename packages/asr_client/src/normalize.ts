@@ -1,22 +1,22 @@
 import type { TranscriptResult, WordResult } from "@taleshift/shared-types";
-import type { RawAzureAssessmentResult } from "./azureClient";
+import type { RawAsrAssessmentResult } from "./client";
 
 /**
- * The rest of the app never sees Azure's response shape directly.
- * If you swap providers later (AssemblyAI, Deepgram), you only
- * write a new normalize function here, nothing downstream changes.
+ * Maps the Python ASR service response into the shared TranscriptResult
+ * shape. If the service response schema changes, update only this file —
+ * nothing downstream depends on RawAsrAssessmentResult.
  */
-export function normalizeAzureResult(
-  raw: RawAzureAssessmentResult,
+export function normalizeAsrResult(
+  raw: RawAsrAssessmentResult,
   storyId: string,
   sessionId: string
 ): TranscriptResult {
   const words: WordResult[] = raw.words.map((w) => ({
-    text: w.Word,
-    startMs: w.Offset / 10000, // Azure offsets are in 100-nanosecond units
-    endMs: (w.Offset + w.Duration) / 10000,
-    confidence: (w.PronunciationAssessment?.AccuracyScore ?? 0) / 100,
-    accuracyScore: w.PronunciationAssessment?.AccuracyScore,
+    text: w.text,
+    startMs: w.startMs,
+    endMs: w.endMs,
+    confidence: w.confidence,
+    accuracyScore: w.accuracyScore,
     fluencyScore: raw.fluencyScore,
   }));
 

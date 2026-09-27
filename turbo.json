@@ -3,13 +3,14 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"],
-      "env": ["DATABASE_URL"],
-      "passThroughEnv": [
-        "ANTHROPIC_API_KEY",
-        "AZURE_SPEECH_KEY",
-        "AZURE_SPEECH_REGION",
-        "STUDENT_SESSION_SECRET"
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "DATABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "STUDENT_SESSION_SECRET",
+        "TALESHIFT_ASR_SERVICE_URL",
+        "ANTHROPIC_API_KEY"
       ]
     },
     "dev": {

@@ -1,6 +1,7 @@
-export { assessPronunciation } from "./azureClient";
+export { assessPronunciation, transcribeAudio } from "./client";
 export type {
   AssessPronunciationInput,
-  RawAzureAssessmentResult,
-} from "./azureClient";
-export { normalizeAzureResult } from "./normalize";
+  RawAsrAssessmentResult,
+  TranscribeAudioInput,
+} from "./client";
+export { normalizeAsrResult } from "./normalize";

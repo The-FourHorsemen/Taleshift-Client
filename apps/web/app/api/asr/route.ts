@@ -1,36 +1,107 @@
 import { NextRequest, NextResponse } from "next/server";
-import { assessPronunciation, normalizeAzureResult } from "@taleshift/asr-client";
-import { TranscriptResultSchema } from "@taleshift/shared-types";
+import { z, ZodError } from "zod";
+import { transcribeAudio } from "@taleshift/asr-client";
 
 /**
  * Owner: person 1 (ASR and validation lead).
  *
- * Receives an uploaded audio file plus the story's reference text,
- * calls Azure Pronunciation Assessment, normalizes the response,
- * and returns it in the shared TranscriptResult shape.
+ * Receives multipart form data (audio + story/session ids + reference
+ * text), forwards the audio to the Python FastAPI ASR service via
+ * transcribeAudio, and returns a TranscriptResult.
  *
  * Response envelope follows the working agreement convention:
  * { success, data?, error? }
  */
+
+const AsrFieldsSchema = z.object({
+  storyId: z.string().min(1),
+  sessionId: z.string().min(1),
+  referenceText: z.string().min(1),
+});
+
 export async function POST(request: NextRequest) {
+  let formData: FormData;
   try {
-    // TODO(person-1): parse multipart form data for audio file,
-    // storyId, sessionId, and referenceText. Validate all of these
-    // with zod before calling assessPronunciation.
-    const raw = await assessPronunciation({
-      audioFilePath: "", // placeholder until multipart parsing is wired up
-      referenceText: "",
+    formData = await request.formData();
+  } catch (error) {
+    console.error("ASR route: failed to parse multipart body", error);
+    return NextResponse.json(
+      { success: false, error: "Expected multipart form data." },
+      { status: 400 }
+    );
+  }
+
+  const audioFile = formData.get("audioFile");
+  if (!(audioFile instanceof Blob) || audioFile.size === 0) {
+    return NextResponse.json(
+      { success: false, error: "Audio file is required." },
+      { status: 400 }
+    );
+  }
+
+  const fields = AsrFieldsSchema.safeParse({
+    storyId: formData.get("storyId"),
+    sessionId: formData.get("sessionId"),
+    referenceText: formData.get("referenceText"),
+  });
+
+  if (!fields.success) {
+    console.error("ASR route validation error:", fields.error.flatten());
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Invalid request. Provide storyId, sessionId, and referenceText.",
+      },
+      { status: 400 }
+    );
+  }
+
+  try {
+    // referenceText is required on the request contract; forward to the
+    // FastAPI service once /transcribe accepts it.
+    const { storyId, sessionId } = fields.data;
+
+    const data = await transcribeAudio({
+      audioFile,
+      storyId,
+      sessionId,
     });
 
-    const normalized = normalizeAzureResult(raw, "story-placeholder", "session-placeholder");
-    const validated = TranscriptResultSchema.parse(normalized);
-
-    return NextResponse.json({ success: true, data: validated });
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error("ASR route error:", error);
+
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ASR service returned an invalid transcript.",
+        },
+        { status: 502 }
+      );
+    }
+
+    const message = error instanceof Error ? error.message : "";
+
+    if (message.includes("TALESHIFT_ASR_SERVICE_URL")) {
+      return NextResponse.json(
+        { success: false, error: "ASR service is not configured." },
+        { status: 500 }
+      );
+    }
+
+    if (message.includes("ASR service /transcribe failed")) {
+      return NextResponse.json(
+        { success: false, error: "ASR service failed to process audio." },
+        { status: 502 }
+      );
+    }
+
+    // Network failure, timeout, DNS, connection refused, etc.
     return NextResponse.json(
-      { success: false, error: "Failed to process audio." },
-      { status: 500 }
+      { success: false, error: "Could not reach the ASR service." },
+      { status: 503 }
     );
   }
 }
